@@ -17,10 +17,13 @@ import 'screens/expenses_screen.dart';
 import 'screens/payroll_sync_screen.dart';
 import 'screens/profit_sharing_screen.dart';
 import 'screens/printable_report_screen.dart';
+import 'services/settings_service.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('th', null);
+  await SettingsService.init();
   runApp(const SignatureAccountingApp());
 }
 
@@ -79,7 +82,18 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
     _periods = ApiService.generatePeriods();
     final now = DateTime.now();
     _currentPeriod = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    SettingsService.configNotifier.addListener(_onConfigChanged);
     _initData();
+  }
+
+  void _onConfigChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    SettingsService.configNotifier.removeListener(_onConfigChanged);
+    super.dispose();
   }
 
   Future<void> _initData() async {
@@ -238,6 +252,7 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
               ),
               ProfitSharingScreen(profit: profit),
               PrintableReportScreen(profit: profit, period: _currentPeriod),
+              SettingsScreen(onConfigSaved: () => setState(() {})),
             ],
           ),
           if (_isLoading)
@@ -284,6 +299,7 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
             _tabItem(3, 'ต้นทุนเงินเดือนพนักงาน (Payroll)', Icons.people_alt_outlined),
             _tabItem(4, 'การแบ่งกำไร 50/50 (Distributions)', Icons.pie_chart_outline),
             _tabItem(5, 'พิมพ์รายงานสรุป (Report)', Icons.print_outlined),
+            _tabItem(6, 'ตั้งค่าระบบ (Settings)', Icons.settings_outlined),
           ],
         ),
       ),

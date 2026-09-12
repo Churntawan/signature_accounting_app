@@ -2,21 +2,12 @@ import '../models/daily_sale.dart';
 import '../models/store_expense.dart';
 import '../models/profit_distribution.dart';
 import '../models/staff_payroll_item.dart';
+import '../models/app_config.dart';
+import 'settings_service.dart';
 
 class AccountingEngine {
-  static const List<String> stores = [
-    'Signature สาขา Big Shop',
-    'Signature สาขา Cabana',
-    'Seaside',
-  ];
-
-  static const List<String> payers = [
-    'Nantaporn',
-    'Thayakorn',
-    'Churntawan',
-    'Kanthong',
-    'กองกลางร้าน (Store Cash)',
-  ];
+  static List<String> get stores => SettingsService.config.stores;
+  static List<String> get payers => SettingsService.config.payers;
 
   static const List<String> categories = [
     'วัตถุดิบและสต็อกสินค้า (Ingredients/Stock)',
@@ -34,11 +25,14 @@ class AccountingEngine {
     required List<StoreExpense> expenses,
     required List<StaffPayrollItem> staffPayroll,
     List<Map<String, dynamic>> payrollAdjustments = const [],
+    AppConfig? config,
   }) {
+    final activeConfig = config ?? SettingsService.config;
+
     // 1. Compute Revenue
     double totalRevenue = 0.0;
     final Map<String, double> salesByStore = {
-      for (var s in stores) s: 0.0,
+      for (var s in activeConfig.stores) s: 0.0,
     };
 
     for (var sale in sales) {
@@ -50,7 +44,7 @@ class AccountingEngine {
     // 2. Compute Operating Expenses
     double totalOperatingExpenses = 0.0;
     final Map<String, double> expensesByPayer = {
-      for (var p in payers) p: 0.0,
+      for (var p in activeConfig.payers) p: 0.0,
     };
     final Map<String, double> expensesByCategory = {};
 
@@ -77,7 +71,8 @@ class AccountingEngine {
       final cat = (a['category'] ?? '').toString();
       final ep = a['ep_code']?.toString() ?? '';
       if (type == 'Advance' || cat == 'Advance') {
-        final alreadyInStaff = staffPayroll.any((s) => s.epCode == ep && s.advanceDeduction > 0);
+        final alreadyInStaff =
+            staffPayroll.any((s) => s.epCode == ep && s.advanceDeduction > 0);
         if (!alreadyInStaff) {
           totalStaffAdvances += (a['amount'] ?? 0.0).toDouble();
         }
@@ -93,6 +88,7 @@ class AccountingEngine {
       totalStaffPayroll: totalStaffPayroll,
       totalStaffAdvances: totalStaffAdvances,
       staffCount: staffPayroll.length,
+      config: activeConfig,
     );
   }
 }

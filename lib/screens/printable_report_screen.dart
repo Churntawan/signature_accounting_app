@@ -139,16 +139,16 @@ class PrintableReportScreen extends StatelessWidget {
                     // Section 4: Executive Salaries
                     _sectionTitle('4. ค่าตอบแทน/เงินเดือนประจำตำแหน่งผู้บริหาร 4 ท่าน'),
                     _tableBox([
-                      _tableRow('Nantaporn (ผู้ดูแลบัญชีกองกลางร้าน)', '฿${currency.format(ProfitDistribution.nantapornSalary)}'),
-                      _tableRow('Thayakorn (ฝ่ายปฏิบัติการ)', '฿${currency.format(ProfitDistribution.thayakornSalary)}'),
-                      _tableRow('Churntawan (ฝ่ายบริหารทั่วไป)', '฿${currency.format(ProfitDistribution.churntawanSalary)}'),
-                      _tableRow('Kanthong (ผู้ถือหุ้นร่วม)', '฿${currency.format(ProfitDistribution.kanthongSalary)}'),
-                      _tableRow('รวมเงินเดือนผู้บริหารทั้งสิ้น', '฿${currency.format(ProfitDistribution.totalExecutiveSalaries)}', isBold: true, isTotal: true),
+                      _tableRow('Nantaporn (ผู้ดูแลบัญชีกองกลางร้าน)', '฿${currency.format(profit.nantapornSalary)}'),
+                      _tableRow('Thayakorn (ฝ่ายปฏิบัติการ)', '฿${currency.format(profit.thayakornSalary)}'),
+                      _tableRow('Churntawan (ฝ่ายบริหารทั่วไป)', '฿${currency.format(profit.churntawanSalary)}'),
+                      _tableRow('Kanthong (ผู้ถือหุ้นร่วม)', '฿${currency.format(profit.kanthongSalary)}'),
+                      _tableRow('รวมเงินเดือนผู้บริหารทั้งสิ้น', '฿${currency.format(profit.totalExecutiveSalaries)}', isBold: true, isTotal: true),
                     ]),
                     const SizedBox(height: 16),
 
-                    // Section 5: Net Distributable Profit & 50/50 Split
-                    _sectionTitle('5. สรุปกำไรสุทธิสำหรับจัดสรรและการแบ่งปันผลกำไร 50 / 50'),
+                    // Section 5: Net Distributable Profit & Split
+                    _sectionTitle('5. สรุปกำไรสุทธิสำหรับจัดสรรและการแบ่งปันผลกำไร'),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -164,8 +164,8 @@ class PrintableReportScreen extends StatelessWidget {
                             isBold: true,
                           ),
                           const Divider(height: 12),
-                          _tableRow('• กลุ่มที่ 1 (50%): Nantaporn & Thayakorn (คนละ 25%)', '฿${currency.format(profit.group1Share)}'),
-                          _tableRow('• กลุ่มที่ 2 (50%): Churntawan & Kanthong (คนละ 25%)', '฿${currency.format(profit.group2Share)}'),
+                          _tableRow('• กลุ่มที่ 1 (${profit.config.group1Percent.toStringAsFixed(0)}%): Nantaporn & Thayakorn', '฿${currency.format(profit.group1Share)}'),
+                          _tableRow('• กลุ่มที่ 2 (${profit.config.group2Percent.toStringAsFixed(0)}%): Churntawan & Kanthong', '฿${currency.format(profit.group2Share)}'),
                         ],
                       ),
                     ),
@@ -175,10 +175,10 @@ class PrintableReportScreen extends StatelessWidget {
                     _sectionTitle('6. ตารางสรุปยอดเงินรับสุทธิของ 4 ผู้ถือหุ้นประจำงวด (Reimbursement + Salary + Profit)'),
                     _tableBox([
                       _partnerHeaderRow(),
-                      _partnerDetailRow('Nantaporn', profit.nantapornExpensesPaid, ProfitDistribution.nantapornSalary, profit.nantapornProfitShare, profit.nantapornNetPayout),
-                      _partnerDetailRow('Thayakorn', profit.thayakornExpensesPaid, ProfitDistribution.thayakornSalary, profit.thayakornProfitShare, profit.thayakornNetPayout),
-                      _partnerDetailRow('Churntawan', profit.churntawanExpensesPaid, ProfitDistribution.churntawanSalary, profit.churntawanProfitShare, profit.churntawanNetPayout),
-                      _partnerDetailRow('Kanthong', profit.kanthongExpensesPaid, ProfitDistribution.kanthongSalary, profit.kanthongProfitShare, profit.kanthongNetPayout),
+                      _partnerDetailRow('Nantaporn', profit.nantapornExpensesPaid, profit.nantapornSalary, profit.nantapornProfitShare, profit.nantapornNetPayout),
+                      _partnerDetailRow('Thayakorn', profit.thayakornExpensesPaid, profit.thayakornSalary, profit.thayakornProfitShare, profit.thayakornNetPayout),
+                      _partnerDetailRow('Churntawan', profit.churntawanExpensesPaid, profit.churntawanSalary, profit.churntawanProfitShare, profit.churntawanNetPayout),
+                      _partnerDetailRow('Kanthong', profit.kanthongExpensesPaid, profit.kanthongSalary, profit.kanthongProfitShare, profit.kanthongNetPayout),
                     ]),
                     const SizedBox(height: 36),
 

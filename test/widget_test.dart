@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:signature_accounting_app/models/profit_distribution.dart';
 import 'package:signature_accounting_app/screens/dashboard_screen.dart';
 import 'package:signature_accounting_app/screens/profit_sharing_screen.dart';
+import 'package:signature_accounting_app/screens/settings_screen.dart';
 
 void main() {
   final sampleProfit = ProfitDistribution(
@@ -66,5 +67,25 @@ void main() {
     expect(find.text('🔵 Thayakorn'), findsOneWidget);
     expect(find.text('🟢 Churntawan'), findsOneWidget);
     expect(find.text('🟠 Kanthong'), findsOneWidget);
+  });
+
+  testWidgets('SettingsScreen renders configuration sections and allows editing', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SettingsScreen(onConfigSaved: () {}),
+        ),
+      ),
+    );
+
+    expect(find.text('ตั้งค่าโครงสร้างธุรกิจ & กฎบัญชี (System Configuration)'), findsOneWidget);
+    expect(find.text('เงินเดือนประจำตำแหน่งผู้บริหาร (Executive Salaries)'), findsOneWidget);
+    expect(find.text('สาขาร้านค้า (Stores)'), findsOneWidget);
+    expect(find.text('ผู้สำรองจ่าย (Payers)'), findsOneWidget);
+    expect(find.text('สัดส่วนการแบ่งปันผลกำไร (Profit Sharing Ratios)'), findsOneWidget);
   });
 }

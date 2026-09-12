@@ -1,3 +1,5 @@
+import 'app_config.dart';
+
 class ProfitDistribution {
   final double totalRevenue;
   final Map<String, double> salesByStore;
@@ -7,13 +9,7 @@ class ProfitDistribution {
   final double totalStaffPayroll;
   final double totalStaffAdvances;
   final int staffCount;
-
-  // Executive Salaries (เงินเดือนประจำตำแหน่งผู้บริหาร)
-  static const double nantapornSalary = 30000.0;
-  static const double thayakornSalary = 30000.0;
-  static const double churntawanSalary = 25000.0;
-  static const double kanthongSalary = 0.0;
-  static const double totalExecutiveSalaries = 85000.0;
+  final AppConfig config;
 
   ProfitDistribution({
     required this.totalRevenue,
@@ -24,30 +20,42 @@ class ProfitDistribution {
     required this.totalStaffPayroll,
     required this.totalStaffAdvances,
     required this.staffCount,
-  });
+    AppConfig? config,
+  }) : config = config ?? AppConfig.defaults();
+
+  // Dynamic Executive Salaries from config
+  double get nantapornSalary => config.getPartnerSalary('Nantaporn');
+  double get thayakornSalary => config.getPartnerSalary('Thayakorn');
+  double get churntawanSalary => config.getPartnerSalary('Churntawan');
+  double get kanthongSalary => config.getPartnerSalary('Kanthong');
+  double get totalExecutiveSalaries => config.totalExecutiveSalaries;
 
   // กำไรจากการดำเนินงานร้านค้าก่อนหักเงินเดือนผู้บริหาร (Operating Profit)
   double get operatingProfit =>
       totalRevenue - (totalOperatingExpenses + totalStaffPayroll);
 
-  // กำไรสุทธิสำหรับจัดสรรหลังหักเงินเดือนผู้บริหาร 85,000 (Net Distributable Profit)
+  // กำไรสุทธิสำหรับจัดสรรหลังหักเงินเดือนผู้บริหาร (Net Distributable Profit)
   double get netDistributableProfit => operatingProfit - totalExecutiveSalaries;
 
   // อัตรากำไรสุทธิ (Net Margin %)
   double get netProfitMargin =>
       totalRevenue > 0 ? (netDistributableProfit / totalRevenue) * 100 : 0.0;
 
-  // ส่วนแบ่งกำไร 50/50 สองกลุ่มหุ้นส่วน
+  // ส่วนแบ่งกำไรสองกลุ่มหุ้นส่วน (Dynamic จาก config)
   double get group1Share =>
-      netDistributableProfit > 0 ? netDistributableProfit * 0.50 : 0.0;
+      netDistributableProfit > 0 ? netDistributableProfit * (config.group1Percent / 100.0) : 0.0;
   double get group2Share =>
-      netDistributableProfit > 0 ? netDistributableProfit * 0.50 : 0.0;
+      netDistributableProfit > 0 ? netDistributableProfit * (config.group2Percent / 100.0) : 0.0;
 
-  // ส่วนแบ่งรายบุคคลในแต่ละกลุ่ม (คนละ 25% ของกำไรสุทธิทั้งหมด หรือครึ่งหนึ่งของกลุ่ม)
-  double get nantapornProfitShare => group1Share / 2;
-  double get thayakornProfitShare => group1Share / 2;
-  double get churntawanProfitShare => group2Share / 2;
-  double get kanthongProfitShare => group2Share / 2;
+  // ส่วนแบ่งรายบุคคลในแต่ละกลุ่ม (Dynamic จาก config)
+  double get nantapornProfitShare =>
+      netDistributableProfit > 0 ? netDistributableProfit * (config.getPartnerProfitShare('Nantaporn') / 100.0) : 0.0;
+  double get thayakornProfitShare =>
+      netDistributableProfit > 0 ? netDistributableProfit * (config.getPartnerProfitShare('Thayakorn') / 100.0) : 0.0;
+  double get churntawanProfitShare =>
+      netDistributableProfit > 0 ? netDistributableProfit * (config.getPartnerProfitShare('Churntawan') / 100.0) : 0.0;
+  double get kanthongProfitShare =>
+      netDistributableProfit > 0 ? netDistributableProfit * (config.getPartnerProfitShare('Kanthong') / 100.0) : 0.0;
 
   // ยอดเงินสำรองจ่ายที่แต่ละคนควักกระเป๋าจ่ายไปในงวดนี้
   double get nantapornExpensesPaid => expensesByPayer['Nantaporn'] ?? 0.0;

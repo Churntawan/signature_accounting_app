@@ -5,6 +5,7 @@ import 'package:signature_accounting_app/models/staff_payroll_item.dart';
 import 'package:signature_accounting_app/models/employee.dart';
 import 'package:signature_accounting_app/services/accounting_engine.dart';
 import 'package:signature_accounting_app/services/payroll_calculation_service.dart';
+import 'package:signature_accounting_app/models/app_config.dart';
 
 void main() {
   group('AccountingEngine & Profit Sharing Tests', () {
@@ -283,6 +284,127 @@ void main() {
       expect(zin.excessDayOffDeduction, 0.0); // No excess day-off deduction for daily wage
       // Net Pay = 10,800 + 1,000 - 1,500 = 10,300 THB!
       expect(zin.netPay, 10300.0);
+    });
+
+    test('AppConfig serializes and deserializes correctly', () {
+      final config = AppConfig.defaults();
+      final serialized = config.serialize();
+      final deserialized = AppConfig.deserialize(serialized);
+
+      expect(deserialized.stores.length, 3);
+      expect(deserialized.payers.length, 5);
+      expect(deserialized.partners.length, 4);
+      expect(deserialized.totalExecutiveSalaries, 85000.0);
+      expect(deserialized.group1Percent, 50.0);
+      expect(deserialized.group2Percent, 50.0);
+    });
+
+    test('AccountingEngine supports dynamic Executive Salaries, 4th Store, and custom shares', () {
+      // 1. Setup custom config with 4 stores and custom executive salaries
+      final customConfig = AppConfig(
+        stores: [
+          'Signature สาขา Big Shop',
+          'Signature สาขา Cabana',
+          'Seaside',
+          'Signature สาขา Beachfront', // 4th store!
+        ],
+        payers: [
+          'Nantaporn',
+          'Thayakorn',
+          'Churntawan',
+          'Kanthong',
+          'กองกลางร้าน (Store Cash)',
+          'Manager Somchai', // New payer!
+        ],
+        partners: [
+          PartnerConfig(
+            name: 'Nantaporn',
+            role: 'บริหารการเงิน',
+            executiveSalary: 40000.0, // adjusted from 30k -> 40k
+            groupIndex: 1,
+            profitSharePercent: 30.0, // adjusted to 30%
+          ),
+          PartnerConfig(
+            name: 'Thayakorn',
+            role: 'ฝ่ายปฏิบัติการ',
+            executiveSalary: 35000.0, // adjusted from 30k -> 35k
+            groupIndex: 1,
+            profitSharePercent: 20.0, // adjusted to 20%
+          ),
+          PartnerConfig(
+            name: 'Churntawan',
+            role: 'ฝ่ายบริหารทั่วไป',
+            executiveSalary: 25000.0,
+            groupIndex: 2,
+            profitSharePercent: 25.0,
+          ),
+          PartnerConfig(
+            name: 'Kanthong',
+            role: 'ผู้ถือหุ้นร่วม',
+            executiveSalary: 10000.0, // adjusted from 0 -> 10k
+            groupIndex: 2,
+            profitSharePercent: 25.0,
+          ),
+        ],
+      );
+
+      // Total Executive Salaries = 40k + 35k + 25k + 10k = 110,000 THB
+      expect(customConfig.totalExecutiveSalaries, 110000.0);
+      expect(customConfig.group1Percent, 50.0);
+      expect(customConfig.group2Percent, 50.0);
+
+      // Setup sales including the new 4th store
+      final sales = [
+        DailySale(date: '2026-03-01', storeName: 'Signature สาขา Big Shop', totalAmount: 100000.0, period: '2026-03'),
+        DailySale(date: '2026-03-02', storeName: 'Signature สาขา Cabana', totalAmount: 100000.0, period: '2026-03'),
+        DailySale(date: '2026-03-03', storeName: 'Seaside', totalAmount: 100000.0, period: '2026-03'),
+        DailySale(date: '2026-03-04', storeName: 'Signature สาขา Beachfront', totalAmount: 100000.0, period: '2026-03'),
+      ]; // Total Revenue = 400,000 THB across 4 stores
+
+      final expenses = [
+        StoreExpense(date: '2026-03-05', category: 'วัตถุดิบ', payer: 'Manager Somchai', amount: 50000.0, period: '2026-03'),
+      ]; // Total Operating Expenses = 50,000 THB
+
+      final staff = [
+        StaffPayrollItem(
+          epCode: 'EP01',
+          nickname: 'Chujai',
+          payGroup: 'Date : 1',
+          period: '2026-03',
+          baseSalary: 50000.0,
+          basePay: 50000.0,
+          netPay: 50000.0,
+        ),
+      ]; // Total Staff Payroll = 50,000 THB
+
+      final profit = AccountingEngine.compute(
+        sales: sales,
+        expenses: expenses,
+        staffPayroll: staff,
+        config: customConfig,
+      );
+
+      // Total Revenue = 400,000 THB
+      expect(profit.totalRevenue, 400000.0);
+      expect(profit.salesByStore.length, 4);
+      expect(profit.salesByStore['Signature สาขา Beachfront'], 100000.0);
+
+      // Operating Profit = 400,000 - (50,000 + 50,000) = 300,000 THB
+      expect(profit.operatingProfit, 300000.0);
+
+      // Total Executive Salaries = 110,000 THB
+      expect(profit.totalExecutiveSalaries, 110000.0);
+      expect(profit.nantapornSalary, 40000.0);
+      expect(profit.thayakornSalary, 35000.0);
+      expect(profit.kanthongSalary, 10000.0);
+
+      // Net Distributable Profit = 300,000 - 110,000 = 190,000 THB
+      expect(profit.netDistributableProfit, 190000.0);
+
+      // Custom Shares: Nantaporn 30%, Thayakorn 20%
+      expect(profit.nantapornProfitShare, 190000.0 * 0.30); // 57,000 THB
+      expect(profit.thayakornProfitShare, 190000.0 * 0.20); // 38,000 THB
+      expect(profit.group1Share, 95000.0); // 50% of 190,000
     });
   });
 }
