@@ -62,9 +62,12 @@ class PayrollCalculationService {
     for (var emp in employees) {
       final cycle = getCycleRange(period, emp.payGroup);
 
-      // Check if employee has resigned before cycle start
+      // Check if employee has resigned on or before cycle start
       if (emp.resignDate != null) {
-        if (emp.resignDate!.isBefore(cycle.startDate)) continue;
+        if (emp.resignDate!.isBefore(cycle.startDate) ||
+            emp.resignDate!.isAtSameMomentAs(cycle.startDate)) {
+          continue;
+        }
       } else if (!emp.isActive) {
         continue;
       }
