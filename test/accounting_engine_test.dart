@@ -364,6 +364,44 @@ void main() {
       expect(zin.netPay, 10300.0);
     });
 
+    test('PayrollCalculationService strictly logs Day-offs without phantom fallback (Wan in 2026-09: 0 Day-offs + 2 Sick = 0 Excess, 29 Work Days)', () {
+      final employees = [
+        Employee(
+          epCode: 'EP09',
+          nickname: 'Wan',
+          status: 'Active',
+          baseSalary: 12000.0,
+          payGroup: 'Date : 10',
+          stayOutside: 'Yes',
+          note: '[Wage:Daily] [Housing:1000]',
+        ),
+      ];
+
+      // 0 Day-off logged, 2 Sick days logged in 31-day cycle (2026-08-11 to 2026-09-10)
+      final att = [
+        {'ep_code': 'EP09', 'category': 'Sick', 'units': 1.0, 'date': '2026-08-13'},
+        {'ep_code': 'EP09', 'category': 'Sick', 'units': 1.0, 'date': '2026-08-26'},
+      ];
+
+      final items = PayrollCalculationService.computeStaffPayroll(
+        employees: employees,
+        period: '2026-09',
+        attendanceLogs: att,
+        adjustments: [],
+      );
+
+      expect(items.length, 1);
+      final wan = items.first;
+      expect(wan.dayOff, 0);
+      expect(wan.sickLeave, 2);
+      expect(wan.workDays, 29); // 31 - 2 = 29
+      expect(wan.basePay, 29 * 400.0); // 11,600 THB
+      expect(wan.housingAllowance, 1000.0);
+      expect(wan.excessDayOffDays, 0.0);
+      expect(wan.excessDayOffDeduction, 0.0);
+      expect(wan.netPay, 12600.0); // 11,600 + 1,000 = 12,600 THB (matching Excel exactly)
+    });
+
     test('AppConfig serializes and deserializes correctly', () {
       final config = AppConfig.defaults();
       final serialized = config.serialize();

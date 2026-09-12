@@ -156,12 +156,8 @@ class PayrollCalculationService {
       final int otDays = otUnits.round();
       final double overtimePay = (otUnits * standardOtDailyRate).roundToDouble();
 
-      int dayOff = 4;
-      if (loggedDayOffs > 0) {
-        dayOff = loggedDayOffs;
-      } else if (isProrate) {
-        dayOff = 0;
-      }
+      // Day-offs: strictly based on actual logged attendance
+      int dayOff = loggedDayOffs;
 
       // Total off days count towards the 4-day monthly quota:
       // Day-offs (1.0 day/unit) + Sick Leave (1.0 day/unit) + Half-days (0.5 day/unit)
