@@ -1,6 +1,7 @@
 import '../models/daily_sale.dart';
 import '../models/store_expense.dart';
 import '../models/profit_distribution.dart';
+import '../models/staff_payroll_item.dart';
 
 class AccountingEngine {
   static const List<String> stores = [
@@ -31,8 +32,8 @@ class AccountingEngine {
   static ProfitDistribution compute({
     required List<DailySale> sales,
     required List<StoreExpense> expenses,
-    required List<Map<String, dynamic>> payrollSummary,
-    required List<Map<String, dynamic>> payrollAdjustments,
+    required List<StaffPayrollItem> staffPayroll,
+    List<Map<String, dynamic>> payrollAdjustments = const [],
   }) {
     // 1. Compute Revenue
     double totalRevenue = 0.0;
@@ -46,7 +47,7 @@ class AccountingEngine {
           (salesByStore[sale.storeName] ?? 0.0) + sale.totalAmount;
     }
 
-    // 2. Compute Expenses
+    // 2. Compute Operating Expenses
     double totalOperatingExpenses = 0.0;
     final Map<String, double> expensesByPayer = {
       for (var p in payers) p: 0.0,
@@ -63,19 +64,23 @@ class AccountingEngine {
 
     // 3. Compute Staff Payroll
     double totalStaffPayroll = 0.0;
-    for (var p in payrollSummary) {
-      final netPay = (p['net_pay'] ?? 0.0).toDouble();
-      final basePay = (p['base_pay'] ?? 0.0).toDouble();
-      totalStaffPayroll += (netPay > 0 ? netPay : basePay);
+    double totalStaffAdvances = 0.0;
+
+    for (var item in staffPayroll) {
+      totalStaffPayroll += item.netPay;
+      totalStaffAdvances += item.advanceDeduction;
     }
 
-    // 4. Compute Staff Advances
-    double totalStaffAdvances = 0.0;
+    // Include any additional advances for non-active staff in period adjustments
     for (var a in payrollAdjustments) {
       final type = (a['type'] ?? '').toString();
       final cat = (a['category'] ?? '').toString();
+      final ep = a['ep_code']?.toString() ?? '';
       if (type == 'Advance' || cat == 'Advance') {
-        totalStaffAdvances += (a['amount'] ?? 0.0).toDouble();
+        final alreadyInStaff = staffPayroll.any((s) => s.epCode == ep && s.advanceDeduction > 0);
+        if (!alreadyInStaff) {
+          totalStaffAdvances += (a['amount'] ?? 0.0).toDouble();
+        }
       }
     }
 
@@ -87,7 +92,7 @@ class AccountingEngine {
       expensesByCategory: expensesByCategory,
       totalStaffPayroll: totalStaffPayroll,
       totalStaffAdvances: totalStaffAdvances,
-      staffCount: payrollSummary.length,
+      staffCount: staffPayroll.length,
     );
   }
 }

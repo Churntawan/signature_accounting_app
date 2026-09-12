@@ -1,37 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/staff_payroll_item.dart';
+import '../services/api_service.dart';
 
-class PayrollSyncScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> payrollSummary;
+class PayrollSyncScreen extends StatefulWidget {
+  final List<StaffPayrollItem> staffPayroll;
   final List<Map<String, dynamic>> payrollAdjustments;
   final String period;
   final VoidCallback onRefresh;
 
-  final NumberFormat currency = NumberFormat('#,##0.00', 'en_US');
-
-  PayrollSyncScreen({
+  const PayrollSyncScreen({
     super.key,
-    required this.payrollSummary,
+    required this.staffPayroll,
     required this.payrollAdjustments,
     required this.period,
     required this.onRefresh,
   });
 
   @override
+  State<PayrollSyncScreen> createState() => _PayrollSyncScreenState();
+}
+
+class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
+  final NumberFormat currency = NumberFormat('#,##0.00', 'en_US');
+  bool _isSyncingToCloud = false;
+
+  Future<void> _syncToCloud() async {
+    if (widget.staffPayroll.isEmpty) return;
+    setState(() => _isSyncingToCloud = true);
+    final ok = await ApiService.syncPayrollSummaryToCloud(widget.staffPayroll);
+    setState(() => _isSyncingToCloud = false);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? '✅ ซิงค์สรุปเงินเดือน ${widget.staffPayroll.length} ท่านไปยัง Supabase เรียบร้อยแล้ว'
+                : '⚠️ ไม่สามารถซิงค์ได้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต',
+          ),
+          backgroundColor: ok ? Colors.green.shade700 : Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    double totalBase = 0.0;
     double totalNet = 0.0;
     double totalAdvances = 0.0;
+    double totalDeductions = 0.0;
+    double totalExtras = 0.0;
 
-    for (var p in payrollSummary) {
-      totalNet += (p['net_pay'] ?? p['base_pay'] ?? 0.0).toDouble();
-    }
-
-    for (var a in payrollAdjustments) {
-      final type = (a['type'] ?? '').toString();
-      final cat = (a['category'] ?? '').toString();
-      if (type == 'Advance' || cat == 'Advance') {
-        totalAdvances += (a['amount'] ?? 0.0).toDouble();
-      }
+    for (var p in widget.staffPayroll) {
+      totalBase += p.baseSalary;
+      totalNet += p.netPay;
+      totalAdvances += p.advanceDeduction;
+      totalDeductions += (p.workPermitDeduction + p.otherDeduction);
+      totalExtras += p.totalExtra;
     }
 
     return SingleChildScrollView(
@@ -43,7 +70,7 @@ class PayrollSyncScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50.withOpacity(0.6),
+              color: Colors.blue.shade50.withOpacity(0.7),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.blue.shade200),
             ),
@@ -56,27 +83,43 @@ class PayrollSyncScreen extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.cloud_done, color: Colors.blue.shade700, size: 20),
+                          Icon(Icons.bolt, color: Colors.blue.shade700, size: 22),
                           const SizedBox(width: 8),
                           const Text(
-                            'เชื่อมโยงข้อมูลแบบ Real-time จาก Signature Payroll',
+                            'เชื่อมโยงต้นทุนพนักงานแบบ Real-time จาก Signature Payroll',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'ข้อมูลเงินเดือนและเงินเบิกพนักงานในงวด $period ถูกดึงตรงจาก Supabase Cloud ตาราง payroll_summary โดยอัตโนมัติ',
+                        'คำนวณสดจากข้อมูลพนักงาน Active ทั้งหมด (${widget.staffPayroll.length} ท่าน) พร้อมบันทึกวันลา/OT และยอดเบิกเงินในงวด ${widget.period} ตามรอบวิก (Date : 1, 10, 20)',
                         style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
                       ),
                     ],
                   ),
                 ),
-                FilledButton.icon(
-                  onPressed: onRefresh,
-                  icon: const Icon(Icons.sync, size: 16),
-                  label: const Text('ดึงข้อมูลล่าสุด'),
-                  style: FilledButton.styleFrom(backgroundColor: Colors.blue.shade700),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: _isSyncingToCloud ? null : _syncToCloud,
+                      icon: _isSyncingToCloud
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_upload, size: 16),
+                      label: const Text('บันทึกสรุปลง Cloud'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: widget.onRefresh,
+                      icon: const Icon(Icons.sync, size: 16),
+                      label: const Text('รีเฟรชข้อมูล'),
+                      style: FilledButton.styleFrom(backgroundColor: Colors.blue.shade700),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -84,18 +127,29 @@ class PayrollSyncScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Summary Stats Cards
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              Expanded(
-                child: _statBox('จำนวนพนักงาน', '${payrollSummary.length} คน', Icons.people, Colors.indigo),
+              SizedBox(
+                width: 190,
+                child: _statBox('จำนวนพนักงาน Active', '${widget.staffPayroll.length} คน', Icons.people, Colors.indigo),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _statBox('เงินเดือนพนักงานสุทธิ', '฿${currency.format(totalNet)}', Icons.payments, Colors.green.shade700),
+              SizedBox(
+                width: 210,
+                child: _statBox('ฐานเงินเดือนรวม', '฿${currency.format(totalBase)}', Icons.account_balance_wallet, Colors.blue.shade800),
               ),
-              const SizedBox(width: 12),
-              Expanded(
+              SizedBox(
+                width: 200,
                 child: _statBox('ยอดเงินเบิกล่วงหน้า', '฿${currency.format(totalAdvances)}', Icons.money_off, Colors.amber.shade900),
+              ),
+              SizedBox(
+                width: 200,
+                child: _statBox('ยอดหักเอกสาร/อื่นๆ', '฿${currency.format(totalDeductions)}', Icons.remove_circle_outline, Colors.orange.shade800),
+              ),
+              SizedBox(
+                width: 220,
+                child: _statBox('ต้นทุนเงินเดือนสุทธิ', '฿${currency.format(totalNet)}', Icons.payments, Colors.green.shade700),
               ),
             ],
           ),
@@ -107,8 +161,15 @@ class PayrollSyncScreen extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: payrollSummary.isEmpty
+            child: widget.staffPayroll.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.all(40),
                     child: Center(
@@ -117,12 +178,12 @@ class PayrollSyncScreen extends StatelessWidget {
                           Icon(Icons.person_off, size: 40, color: Colors.grey.shade400),
                           const SizedBox(height: 10),
                           Text(
-                            'ยังไม่มีข้อมูลการคำนวณเงินเดือนในงวด $period บน Signature Payroll',
+                            'ไม่พบข้อมูลพนักงานในงวด ${widget.period}',
                             style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'เมื่อคุณเข้าแอป Signature Payroll และกด "Save to Cloud" แล้ว สามารถกดปุ่ม "ดึงข้อมูลล่าสุด" ด้านบนเพื่อซิงค์ได้ทันที',
+                            'ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วกดปุ่ม "รีเฟรชข้อมูล"',
                             style: TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
@@ -134,59 +195,111 @@ class PayrollSyncScreen extends StatelessWidget {
                     child: DataTable(
                       headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
                       columns: const [
-                        DataColumn(label: Text('รหัสพนักงาน', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('รหัส', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('ชื่อเล่น', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('รอบจ่าย (Cycle)', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('ฐานเงินเดือน', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('วันทำงาน / OT', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('เงินเบิกล่วงหน้า', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('วันทำงาน / ขาด / OT', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('เงินเบิก (Advance)', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('หักอื่นๆ / เอกสาร', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('เงินเดือนสุทธิ (Net Pay)', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('สถานะ', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('หมายเหตุ / ประจำงวด', style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
-                      rows: payrollSummary.map((p) {
-                        final epCode = p['ep_code'] ?? '';
-                        // Find advances for this employee
-                        double empAdv = 0.0;
-                        for (var a in payrollAdjustments) {
-                          if (a['ep_code'] == epCode &&
-                              (a['type'] == 'Advance' || a['category'] == 'Advance')) {
-                            empAdv += (a['amount'] ?? 0.0).toDouble();
-                          }
-                        }
-
-                        final netPay = (p['net_pay'] ?? p['base_pay'] ?? 0.0).toDouble();
-
+                      rows: widget.staffPayroll.map((p) {
                         return DataRow(
                           cells: [
-                            DataCell(Text(epCode, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo, fontFamily: 'monospace'))),
-                            DataCell(Text(p['nickname'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w600))),
-                            DataCell(Text('฿${currency.format(p['base_salary'] ?? 0.0)}', style: const TextStyle(fontFamily: 'monospace'))),
-                            DataCell(Text('${p['work_days'] ?? 0} วัน / OT ${p['ot_days'] ?? 0} วัน', style: const TextStyle(fontSize: 12))),
-                            DataCell(Text('฿${currency.format(empAdv)}', style: TextStyle(color: Colors.amber.shade900, fontFamily: 'monospace'))),
                             DataCell(
                               Text(
-                                '฿${currency.format(netPay)}',
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade800, fontFamily: 'monospace'),
+                                p.epCode,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.indigo,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 12,
+                                    backgroundColor: Colors.blue.shade100,
+                                    child: Text(
+                                      p.nickname.isNotEmpty ? p.nickname[0].toUpperCase() : '?',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(p.nickname, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                ],
                               ),
                             ),
                             DataCell(
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: p['status'] == 'Approved' ? Colors.green.shade50 : Colors.amber.shade50,
+                                  color: Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: p['status'] == 'Approved' ? Colors.green.shade200 : Colors.amber.shade200,
-                                  ),
+                                  border: Border.all(color: Colors.grey.shade300),
                                 ),
-                                child: Text(
-                                  p['status'] ?? 'Pending',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: p['status'] == 'Approved' ? Colors.green.shade800 : Colors.amber.shade900,
-                                  ),
+                                child: Text(p.payGroup, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                              ),
+                            ),
+                            DataCell(Text('฿${currency.format(p.baseSalary)}', style: const TextStyle(fontFamily: 'monospace'))),
+                            DataCell(
+                              Text(
+                                '${p.workedDays} วัน / ลา ${p.sickLeave} วัน / OT ${p.otDays} วัน',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                p.advanceDeduction > 0 ? '-฿${currency.format(p.advanceDeduction)}' : '-',
+                                style: TextStyle(
+                                  color: p.advanceDeduction > 0 ? Colors.amber.shade900 : Colors.grey,
+                                  fontWeight: p.advanceDeduction > 0 ? FontWeight.bold : FontWeight.normal,
+                                  fontFamily: 'monospace',
                                 ),
                               ),
+                            ),
+                            DataCell(
+                              Text(
+                                (p.workPermitDeduction + p.otherDeduction) > 0
+                                    ? '-฿${currency.format(p.workPermitDeduction + p.otherDeduction)}'
+                                    : '-',
+                                style: TextStyle(
+                                  color: (p.workPermitDeduction + p.otherDeduction) > 0 ? Colors.red.shade700 : Colors.grey,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                '฿${currency.format(p.netPay)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade800,
+                                  fontFamily: 'monospace',
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              p.isProrate || p.note.isNotEmpty
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.purple.shade200),
+                                      ),
+                                      child: Text(
+                                        p.note.isNotEmpty ? p.note : 'Prorated',
+                                        style: TextStyle(fontSize: 10, color: Colors.purple.shade800, fontWeight: FontWeight.w600),
+                                      ),
+                                    )
+                                  : const Text('-', style: TextStyle(color: Colors.grey)),
                             ),
                           ],
                         );
@@ -210,15 +323,21 @@ class PayrollSyncScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace')),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color, fontFamily: 'monospace'),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-          Icon(icon, color: color, size: 24),
+          Icon(icon, color: color, size: 22),
         ],
       ),
     );

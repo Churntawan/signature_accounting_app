@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:signature_accounting_app/models/daily_sale.dart';
 import 'package:signature_accounting_app/models/store_expense.dart';
+import 'package:signature_accounting_app/models/staff_payroll_item.dart';
+import 'package:signature_accounting_app/models/employee.dart';
 import 'package:signature_accounting_app/services/accounting_engine.dart';
+import 'package:signature_accounting_app/services/payroll_calculation_service.dart';
 
 void main() {
   group('AccountingEngine & Profit Sharing Tests', () {
@@ -57,26 +60,58 @@ void main() {
       ];
       // Total Operating Expenses = 50k + 30k + 20k = 100,000 THB
 
-      // 3. Setup sample payroll summary
-      final payrollSummary = [
-        {'ep_code': 'EP01', 'nickname': 'Chujai', 'net_pay': 17000.0, 'base_pay': 17000.0},
-        {'ep_code': 'EP04', 'nickname': 'Zin', 'net_pay': 12000.0, 'base_pay': 12000.0},
-        {'ep_code': 'EP05', 'nickname': 'Min', 'net_pay': 14000.0, 'base_pay': 14000.0},
-        {'ep_code': 'EP06', 'nickname': 'Soe', 'net_pay': 12000.0, 'base_pay': 12000.0},
+      // 3. Setup sample staff payroll items
+      final staffPayroll = [
+        StaffPayrollItem(
+          epCode: 'EP01',
+          nickname: 'Chujai',
+          payGroup: 'Date : 1',
+          period: '2026-03',
+          baseSalary: 17000.0,
+          basePay: 17000.0,
+          netPay: 17000.0,
+        ),
+        StaffPayrollItem(
+          epCode: 'EP04',
+          nickname: 'Zin',
+          payGroup: 'Date : 10',
+          period: '2026-03',
+          baseSalary: 12000.0,
+          basePay: 12000.0,
+          advanceDeduction: 1500.0,
+          netPay: 10500.0,
+        ),
+        StaffPayrollItem(
+          epCode: 'EP05',
+          nickname: 'Min',
+          payGroup: 'Date : 10',
+          period: '2026-03',
+          baseSalary: 14000.0,
+          basePay: 14000.0,
+          netPay: 14000.0,
+        ),
+        StaffPayrollItem(
+          epCode: 'EP06',
+          nickname: 'Soe',
+          payGroup: 'Date : 10',
+          period: '2026-03',
+          baseSalary: 12000.0,
+          basePay: 12000.0,
+          netPay: 12000.0,
+        ),
       ];
-      // Total Staff Payroll = 17k + 12k + 14k + 12k = 55,000 THB
+      // Total Staff Payroll Net Pay = 17k + 10.5k + 14k + 12k = 53,500 THB
+      // Advances = 1,500 THB
 
       final payrollAdjustments = [
         {'ep_code': 'EP01', 'type': 'Deduction', 'category': 'Advance', 'amount': 2000.0},
-        {'ep_code': 'EP04', 'type': 'Deduction', 'category': 'Advance', 'amount': 1500.0},
       ];
-      // Total Advances = 3,500 THB
 
       // Execute computation
       final profit = AccountingEngine.compute(
         sales: sales,
         expenses: expenses,
-        payrollSummary: payrollSummary,
+        staffPayroll: staffPayroll,
         payrollAdjustments: payrollAdjustments,
       );
 
@@ -88,39 +123,85 @@ void main() {
 
       // Check operating expenses
       expect(profit.totalOperatingExpenses, 100000.0);
-      expect(profit.totalStaffPayroll, 55000.0);
-      expect(profit.totalStaffAdvances, 3500.0);
+      expect(profit.totalStaffPayroll, 53500.0);
+      expect(profit.totalStaffAdvances, 3500.0); // 1500 in staff + 2000 in adj
+      expect(profit.staffCount, 4);
 
-      // Operating Profit = 350,000 - (100,000 + 55,000) = 195,000 THB
-      expect(profit.operatingProfit, 195000.0);
+      // Operating Profit = 350,000 - (100,000 + 53,500) = 196,500 THB
+      expect(profit.operatingProfit, 196500.0);
 
-      // Executive Salaries = 85,000 THB (Nantaporn: 30k, Thayakorn: 30k, Churntawan: 25k, Kanthong: 0)
-      // Net Distributable Profit = 195,000 - 85,000 = 110,000 THB
-      expect(profit.netDistributableProfit, 110000.0);
+      // Executive Salaries = 85,000 THB
+      // Net Distributable Profit = 196,500 - 85,000 = 111,500 THB
+      expect(profit.netDistributableProfit, 111500.0);
 
       // 50/50 Profit Sharing
-      // Group 1 (Nantaporn & Thayakorn): 50% of 110,000 = 55,000 THB
-      expect(profit.group1Share, 55000.0);
-      expect(profit.nantapornProfitShare, 27500.0);
-      expect(profit.thayakornProfitShare, 27500.0);
+      expect(profit.group1Share, 55750.0);
+      expect(profit.nantapornProfitShare, 27875.0);
+      expect(profit.thayakornProfitShare, 27875.0);
 
-      // Group 2 (Churntawan & Kanthong): 50% of 110,000 = 55,000 THB
-      expect(profit.group2Share, 55000.0);
-      expect(profit.churntawanProfitShare, 27500.0);
-      expect(profit.kanthongProfitShare, 27500.0);
+      expect(profit.group2Share, 55750.0);
+      expect(profit.churntawanProfitShare, 27875.0);
+      expect(profit.kanthongProfitShare, 27875.0);
+    });
 
-      // Net Payouts:
-      // Nantaporn: Reimbursement 50k + Salary 30k + Profit 27.5k = 107,500 THB
-      expect(profit.nantapornNetPayout, 107500.0);
+    test('PayrollCalculationService computes cycle dates and employee records accurately', () {
+      final employees = [
+        Employee(
+          epCode: 'EP04',
+          nickname: 'Zin',
+          status: 'Active',
+          baseSalary: 12000.0,
+          payGroup: 'Date : 10',
+        ),
+        Employee(
+          epCode: 'EP16',
+          nickname: 'T',
+          status: 'Active',
+          baseSalary: 13000.0,
+          payGroup: 'Date : 20',
+        ),
+        Employee(
+          epCode: 'EP31',
+          nickname: 'Kat',
+          status: 'Active',
+          baseSalary: 14000.0,
+          payGroup: 'Date : 1',
+        ),
+      ];
 
-      // Thayakorn: Reimbursement 30k + Salary 30k + Profit 27.5k = 87,500 THB
-      expect(profit.thayakornNetPayout, 87500.0);
+      final adjs = [
+        {'ep_code': 'EP04', 'type': 'Deduction', 'category': 'Advance (เบิกเงิน)', 'amount': 1500.0},
+        {'ep_code': 'EP31', 'type': 'Deduction', 'category': 'Passport / CI', 'amount': 3000.0},
+      ];
 
-      // Churntawan: Reimbursement 20k + Salary 25k + Profit 27.5k = 72,500 THB
-      expect(profit.churntawanNetPayout, 72500.0);
+      final att = [
+        {'ep_code': 'EP16', 'category': 'OT Days', 'units': 2.0, 'date': '2026-09-05'},
+      ];
 
-      // Kanthong: Reimbursement 0k + Salary 0k + Profit 27.5k = 27,500 THB
-      expect(profit.kanthongNetPayout, 27500.0);
+      final items = PayrollCalculationService.computeStaffPayroll(
+        employees: employees,
+        period: '2026-09',
+        attendanceLogs: att,
+        adjustments: adjs,
+      );
+
+      expect(items.length, 3);
+
+      final zin = items.firstWhere((i) => i.epCode == 'EP04');
+      expect(zin.baseSalary, 12000.0);
+      expect(zin.advanceDeduction, 1500.0);
+      expect(zin.netPay, 10500.0);
+
+      final t = items.firstWhere((i) => i.epCode == 'EP16');
+      expect(t.baseSalary, 13000.0);
+      expect(t.otDays, 2);
+      expect(t.overtimePay, 360.0);
+      expect(t.netPay, 13360.0);
+
+      final kat = items.firstWhere((i) => i.epCode == 'EP31');
+      expect(kat.baseSalary, 14000.0);
+      expect(kat.workPermitDeduction, 3000.0);
+      expect(kat.netPay, 11000.0);
     });
   });
 }

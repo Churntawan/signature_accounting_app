@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'models/daily_sale.dart';
 import 'models/store_expense.dart';
 import 'models/profit_distribution.dart';
+import 'models/staff_payroll_item.dart';
 import 'services/api_service.dart';
 import 'services/accounting_engine.dart';
 import 'widgets/period_selector_bar.dart';
@@ -45,7 +46,7 @@ class SignatureAccountingApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           elevation: 0,
-          scrolledUnderElevation: 0,
+          scrolledUnderElevation: 1,
         ),
       ),
       home: const MainAccountingScreen(),
@@ -69,7 +70,7 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
 
   List<DailySale> _sales = [];
   List<StoreExpense> _expenses = [];
-  List<Map<String, dynamic>> _payrollSummary = [];
+  List<StaffPayrollItem> _staffPayroll = [];
   List<Map<String, dynamic>> _payrollAdjustments = [];
 
   @override
@@ -92,14 +93,14 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
     final results = await Future.wait([
       ApiService.fetchSales(_currentPeriod),
       ApiService.fetchExpenses(_currentPeriod),
-      ApiService.fetchPayrollSummary(_currentPeriod),
+      ApiService.fetchLiveStaffPayroll(_currentPeriod),
       ApiService.fetchPayrollAdjustments(_currentPeriod),
     ]);
 
     setState(() {
       _sales = results[0] as List<DailySale>;
       _expenses = results[1] as List<StoreExpense>;
-      _payrollSummary = results[2] as List<Map<String, dynamic>>;
+      _staffPayroll = results[2] as List<StaffPayrollItem>;
       _payrollAdjustments = results[3] as List<Map<String, dynamic>>;
     });
   }
@@ -108,7 +109,7 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
     return AccountingEngine.compute(
       sales: _sales,
       expenses: _expenses,
-      payrollSummary: _payrollSummary,
+      staffPayroll: _staffPayroll,
       payrollAdjustments: _payrollAdjustments,
     );
   }
@@ -230,7 +231,7 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
                 },
               ),
               PayrollSyncScreen(
-                payrollSummary: _payrollSummary,
+                staffPayroll: _staffPayroll,
                 payrollAdjustments: _payrollAdjustments,
                 period: _currentPeriod,
                 onRefresh: _loadPeriodData,
@@ -249,9 +250,13 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(strokeWidth: 2.5),
-                        SizedBox(width: 14),
-                        Text('กำลังโหลดข้อมูล...', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('กำลังโหลดข้อมูลบัญชีและเงินเดือนพนักงาน...'),
                       ],
                     ),
                   ),
@@ -265,30 +270,32 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
 
   Widget _buildTabBar() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            _tabItem(0, Icons.dashboard, 'ภาพรวม & งบ P&L'),
-            _tabItem(1, Icons.storefront, 'ยอดขาย 3 ร้าน'),
-            _tabItem(2, Icons.wallet, 'รายจ่าย 4 แหล่งเงินทุน'),
-            _tabItem(3, Icons.people, 'ต้นทุนพนักงาน Live Sync'),
-            _tabItem(4, Icons.pie_chart, 'จัดสรรกำไร 50/50 & เคลียร์เงิน'),
-            _tabItem(5, Icons.print, 'พิมพ์รายงาน A4'),
+            _tabItem(0, 'แดชบอร์ดสรุป (Dashboard)', Icons.dashboard_outlined),
+            _tabItem(1, 'ยอดขายประจำวัน (Sales)', Icons.point_of_sale_outlined),
+            _tabItem(2, 'รายจ่ายร้านค้า (Expenses)', Icons.receipt_long_outlined),
+            _tabItem(3, 'ต้นทุนเงินเดือนพนักงาน (Payroll)', Icons.people_alt_outlined),
+            _tabItem(4, 'การแบ่งกำไร 50/50 (Distributions)', Icons.pie_chart_outline),
+            _tabItem(5, 'พิมพ์รายงานสรุป (Report)', Icons.print_outlined),
           ],
         ),
       ),
     );
   }
 
-  Widget _tabItem(int index, IconData icon, String title) {
+  Widget _tabItem(int index, String title, IconData icon) {
     final isSelected = _currentTabIndex == index;
     return InkWell(
       onTap: () => setState(() => _currentTabIndex = index),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -299,12 +306,16 @@ class _MainAccountingScreenState extends State<MainAccountingScreen> {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.indigo : Colors.grey.shade600),
-            const SizedBox(width: 6),
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? Colors.indigo : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 8),
             Text(
               title,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 color: isSelected ? Colors.indigo : Colors.grey.shade700,
               ),

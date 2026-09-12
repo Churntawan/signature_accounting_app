@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/daily_sale.dart';
 import '../models/store_expense.dart';
+import '../models/employee.dart';
+import '../models/staff_payroll_item.dart';
+import 'payroll_calculation_service.dart';
 
 class ApiService {
   static const String supabaseUrl = 'https://qsmigegcefcbohmufywh.supabase.co/rest/v1';
@@ -194,7 +197,61 @@ class ApiService {
     return true;
   }
 
-  // 9. Fetch Payroll Summary Live from Signature Payroll
+  // 9. Fetch Employees from Supabase
+  static Future<List<Employee>> fetchEmployees() async {
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$supabaseUrl/employees?select=*&order=ep_code.asc'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final List<dynamic> list = jsonDecode(res.body);
+        return list.map((item) => Employee.fromJson(item)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // 10. Fetch Attendance from Supabase
+  static Future<List<Map<String, dynamic>>> fetchAttendance() async {
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$supabaseUrl/attendance_log?select=*&order=date.desc'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final List<dynamic> list = jsonDecode(res.body);
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // 11. Fetch Payroll Adjustments from Supabase
+  static Future<List<Map<String, dynamic>>> fetchPayrollAdjustments(String period) async {
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$supabaseUrl/payroll_adjustments?period=eq.$period&order=due_date.desc'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final List<dynamic> list = jsonDecode(res.body);
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // 12. Fetch Payroll Summary Snapshots from Supabase
   static Future<List<Map<String, dynamic>>> fetchPayrollSummary(String period) async {
     try {
       final res = await http
@@ -212,21 +269,52 @@ class ApiService {
     return [];
   }
 
-  // 10. Fetch Payroll Adjustments Live (Advances, Deductions)
-  static Future<List<Map<String, dynamic>>> fetchPayrollAdjustments(String period) async {
+  // 13. Fetch Live Staff Payroll (Real-time dynamic calculation across all 15 active staff)
+  static Future<List<StaffPayrollItem>> fetchLiveStaffPayroll(String period) async {
     try {
-      final res = await http
-          .get(
-            Uri.parse('$supabaseUrl/payroll_adjustments?period=eq.$period&order=due_date.desc'),
-            headers: _headers,
-          )
-          .timeout(const Duration(seconds: 6));
+      final results = await Future.wait([
+        fetchEmployees(),
+        fetchAttendance(),
+        fetchPayrollAdjustments(period),
+        fetchPayrollSummary(period),
+      ]);
 
-      if (res.statusCode == 200) {
-        final List<dynamic> list = jsonDecode(res.body);
-        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      final employees = results[0] as List<Employee>;
+      final attendance = results[1] as List<Map<String, dynamic>>;
+      final adjustments = results[2] as List<Map<String, dynamic>>;
+      final savedSummary = results[3] as List<Map<String, dynamic>>;
+
+      if (employees.isNotEmpty) {
+        return PayrollCalculationService.computeStaffPayroll(
+          employees: employees,
+          period: period,
+          attendanceLogs: attendance,
+          adjustments: adjustments,
+          savedSummary: savedSummary,
+        );
       }
     } catch (_) {}
+
     return [];
+  }
+
+  // 14. Sync & Upsert complete calculated payroll to Supabase payroll_summary
+  static Future<bool> syncPayrollSummaryToCloud(List<StaffPayrollItem> items) async {
+    if (items.isEmpty) return true;
+    try {
+      final upsertHeaders = Map<String, String>.from(_headers);
+      upsertHeaders['Prefer'] = 'resolution=merge-duplicates';
+
+      final payload = items.map((i) => i.toJson()).toList();
+      final res = await http.post(
+        Uri.parse('$supabaseUrl/payroll_summary?on_conflict=period,ep_code'),
+        headers: upsertHeaders,
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+
+      return res.statusCode == 200 || res.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
   }
 }
