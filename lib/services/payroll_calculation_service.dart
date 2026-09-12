@@ -151,6 +151,19 @@ class PayrollCalculationService {
         dayOff = 0;
       }
 
+      // Work Days calculation
+      int workDays = isProrate
+          ? (workedDays - dayOff - sickLeave).clamp(0, totalCycleDays)
+          : (30 - dayOff - sickLeave).clamp(0, 30);
+
+      // Excess day-off calculation (monthly quota is 4 days)
+      int excessDayOffDays = 0;
+      double excessDayOffDeduction = 0.0;
+      if (dayOff > 4) {
+        excessDayOffDays = dayOff - 4;
+        excessDayOffDeduction = (excessDayOffDays * dailyRate).roundToDouble();
+      }
+
       // Adjustments matching this employee
       final empAdjs = adjustments.where((a) => a['ep_code']?.toString() == emp.epCode).toList();
       double advanceDeduction = 0.0;
@@ -181,7 +194,7 @@ class PayrollCalculationService {
         }
       }
 
-      // Housing Allowance
+      // Housing Allowance (฿1,000 for staying outside, eligible after 1 month)
       double housingAllowance = 0.0;
       if (emp.stayOutside.toLowerCase() == 'yes') {
         bool eligible = true;
@@ -193,13 +206,13 @@ class PayrollCalculationService {
         if (eligible) housingAllowance = 1000.0;
       }
 
-      // If saved in Supabase payroll_summary, we can use its net_pay if explicitly recorded
       double finalNetPay = basePay + overtimePay + bonusPay + otherExtra + housingAllowance -
-          advanceDeduction - workPermitDeduction - otherDeduction;
+          advanceDeduction - workPermitDeduction - otherDeduction - excessDayOffDeduction;
 
-      if (saved != null && saved['net_pay'] != null) {
+      // Special override for historical/saved snapshot if approved
+      if (saved != null && saved['status'] == 'Approved' && saved['net_pay'] != null) {
         final savedNet = (saved['net_pay'] as num?)?.toDouble() ?? 0.0;
-        if (savedNet > 0 && empAdjs.isEmpty && empAtt.isEmpty) {
+        if (savedNet > 0 && emp.resignDate != null) {
           finalNetPay = savedNet;
         }
       }
@@ -212,6 +225,7 @@ class PayrollCalculationService {
         baseSalary: emp.baseSalary,
         basePay: basePay,
         workedDays: workedDays,
+        workDays: workDays,
         dayOff: dayOff,
         sickLeave: sickLeave,
         otDays: otDays,
@@ -222,6 +236,8 @@ class PayrollCalculationService {
         advanceDeduction: advanceDeduction,
         workPermitDeduction: workPermitDeduction,
         otherDeduction: otherDeduction,
+        excessDayOffDays: excessDayOffDays,
+        excessDayOffDeduction: excessDayOffDeduction,
         netPay: finalNetPay,
         status: emp.status,
         note: reasons.join(' | '),

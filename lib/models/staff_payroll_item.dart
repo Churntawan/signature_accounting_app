@@ -6,6 +6,7 @@ class StaffPayrollItem {
   final double baseSalary;
   final double basePay;
   final int workedDays;
+  final int workDays;
   final int dayOff;
   final int sickLeave;
   final int otDays;
@@ -16,6 +17,8 @@ class StaffPayrollItem {
   final double advanceDeduction;
   final double workPermitDeduction;
   final double otherDeduction;
+  final int excessDayOffDays;
+  final double excessDayOffDeduction;
   final double netPay;
   final String status;
   final String note;
@@ -29,6 +32,7 @@ class StaffPayrollItem {
     required this.baseSalary,
     required this.basePay,
     this.workedDays = 30,
+    this.workDays = 26,
     this.dayOff = 4,
     this.sickLeave = 0,
     this.otDays = 0,
@@ -39,6 +43,8 @@ class StaffPayrollItem {
     this.advanceDeduction = 0.0,
     this.workPermitDeduction = 0.0,
     this.otherDeduction = 0.0,
+    this.excessDayOffDays = 0,
+    this.excessDayOffDeduction = 0.0,
     required this.netPay,
     this.status = 'Active',
     this.note = '',
@@ -46,7 +52,8 @@ class StaffPayrollItem {
   });
 
   double get totalExtra => overtimePay + bonusPay + otherExtra + housingAllowance;
-  double get totalDeduction => advanceDeduction + workPermitDeduction + otherDeduction;
+  double get totalDeduction =>
+      advanceDeduction + workPermitDeduction + otherDeduction + excessDayOffDeduction;
 
   factory StaffPayrollItem.fromJson(Map<String, dynamic> json) {
     return StaffPayrollItem(
@@ -59,6 +66,7 @@ class StaffPayrollItem {
           (json['base_salary'] as num?)?.toDouble() ??
           0.0,
       workedDays: (json['work_days'] as num?)?.toInt() ?? 30,
+      workDays: (json['work_days'] as num?)?.toInt() ?? 26,
       dayOff: (json['day_off'] as num?)?.toInt() ?? 4,
       sickLeave: (json['sick'] as num?)?.toInt() ?? 0,
       otDays: (json['ot_days'] as num?)?.toInt() ?? 0,
@@ -69,6 +77,8 @@ class StaffPayrollItem {
       advanceDeduction: (json['advance_deduction'] as num?)?.toDouble() ?? 0.0,
       workPermitDeduction: (json['work_permit_deduction'] as num?)?.toDouble() ?? 0.0,
       otherDeduction: (json['total_deduction'] as num?)?.toDouble() ?? 0.0,
+      excessDayOffDays: (json['excess_day_off_days'] as num?)?.toInt() ?? 0,
+      excessDayOffDeduction: (json['excess_day_off_deduction'] as num?)?.toDouble() ?? 0.0,
       netPay: (json['net_pay'] as num?)?.toDouble() ?? 0.0,
       status: json['status']?.toString() ?? 'Active',
       note: json['note']?.toString() ?? '',
@@ -85,7 +95,7 @@ class StaffPayrollItem {
         'pay_type': isProrate ? 'Prorated' : 'Full Month',
         'base_salary': baseSalary,
         'base_pay': basePay,
-        'work_days': workedDays,
+        'work_days': workDays,
         'day_off': dayOff,
         'sick': sickLeave,
         'ot_days': otDays,

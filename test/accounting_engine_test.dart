@@ -203,5 +203,41 @@ void main() {
       expect(kat.workPermitDeduction, 3000.0);
       expect(kat.netPay, 11000.0);
     });
+
+    test('PayrollCalculationService calculates excess day-off deductions and housing allowance correctly', () {
+      final employees = [
+        Employee(
+          epCode: 'EP33',
+          nickname: 'Tualek',
+          status: 'Active',
+          baseSalary: 12500.0,
+          payGroup: 'Date : 1',
+          stayOutside: 'Yes',
+        ),
+      ];
+
+      // 10 days off -> 6 days excess
+      final att = [
+        for (int i = 8; i <= 17; i++)
+          {'ep_code': 'EP33', 'category': 'Day-off', 'units': 1.0, 'date': '2026-08-${i.toString().padLeft(2, '0')}'},
+      ];
+
+      final items = PayrollCalculationService.computeStaffPayroll(
+        employees: employees,
+        period: '2026-09',
+        attendanceLogs: att,
+        adjustments: [],
+      );
+
+      expect(items.length, 1);
+      final tualek = items.first;
+      expect(tualek.dayOff, 10);
+      expect(tualek.excessDayOffDays, 6);
+      expect(tualek.excessDayOffDeduction, (6 * (12500.0 / 30.0)).roundToDouble()); // 2500.0
+      expect(tualek.housingAllowance, 1000.0);
+      // Net Pay = 12,500 + 1,000 (housing) - 2,500 (excess off) = 11,000.0
+      expect(tualek.netPay, 11000.0);
+      expect(tualek.workDays, 20); // 30 - 10 = 20 work days
+    });
   });
 }

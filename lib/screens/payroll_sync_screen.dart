@@ -51,14 +51,18 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
     double totalNet = 0.0;
     double totalAdvances = 0.0;
     double totalDeductions = 0.0;
+    double totalHousing = 0.0;
     double totalExtras = 0.0;
+    double totalExcessOffDeductions = 0.0;
 
     for (var p in widget.staffPayroll) {
       totalBase += p.baseSalary;
       totalNet += p.netPay;
       totalAdvances += p.advanceDeduction;
       totalDeductions += (p.workPermitDeduction + p.otherDeduction);
-      totalExtras += p.totalExtra;
+      totalHousing += p.housingAllowance;
+      totalExtras += (p.overtimePay + p.bonusPay + p.otherExtra);
+      totalExcessOffDeductions += p.excessDayOffDeduction;
     }
 
     return SingleChildScrollView(
@@ -132,24 +136,28 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
             runSpacing: 12,
             children: [
               SizedBox(
-                width: 190,
+                width: 175,
                 child: _statBox('จำนวนพนักงาน Active', '${widget.staffPayroll.length} คน', Icons.people, Colors.indigo),
               ),
               SizedBox(
-                width: 210,
+                width: 195,
                 child: _statBox('ฐานเงินเดือนรวม', '฿${currency.format(totalBase)}', Icons.account_balance_wallet, Colors.blue.shade800),
               ),
               SizedBox(
-                width: 200,
-                child: _statBox('ยอดเงินเบิกล่วงหน้า', '฿${currency.format(totalAdvances)}', Icons.money_off, Colors.amber.shade900),
+                width: 190,
+                child: _statBox('ค่าห้องพัก/เพิ่มรวม', '+฿${currency.format(totalHousing + totalExtras)}', Icons.add_home_work, Colors.green.shade700),
+              ),
+              SizedBox(
+                width: 185,
+                child: _statBox('ยอดเงินเบิกล่วงหน้า', '-฿${currency.format(totalAdvances)}', Icons.money_off, Colors.amber.shade900),
               ),
               SizedBox(
                 width: 200,
-                child: _statBox('ยอดหักเอกสาร/อื่นๆ', '฿${currency.format(totalDeductions)}', Icons.remove_circle_outline, Colors.orange.shade800),
+                child: _statBox('หักเอกสาร & หยุดเกิน', '-฿${currency.format(totalDeductions + totalExcessOffDeductions)}', Icons.remove_circle_outline, Colors.orange.shade800),
               ),
               SizedBox(
-                width: 220,
-                child: _statBox('ต้นทุนเงินเดือนสุทธิ', '฿${currency.format(totalNet)}', Icons.payments, Colors.green.shade700),
+                width: 215,
+                child: _statBox('ต้นทุนเงินเดือนสุทธิ', '฿${currency.format(totalNet)}', Icons.payments, Colors.teal.shade800),
               ),
             ],
           ),
@@ -199,13 +207,19 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
                         DataColumn(label: Text('ชื่อเล่น', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('รอบจ่าย (Cycle)', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('ฐานเงินเดือน', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('วันทำงาน / ขาด / OT', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('สถิติทำงาน (ทำ/หยุด/ลา/OT)', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('ค่าห้องพัก', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('เงินเพิ่ม / OT', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('เงินเบิก (Advance)', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('หักอื่นๆ / เอกสาร', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('หักเอกสาร/อื่นๆ', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('หักหยุดเกินโควตา', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('เงินเดือนสุทธิ (Net Pay)', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('หมายเหตุ / ประจำงวด', style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
                       rows: widget.staffPayroll.map((p) {
+                        final extra = p.overtimePay + p.bonusPay + p.otherExtra;
+                        final docs = p.workPermitDeduction + p.otherDeduction;
+
                         return DataRow(
                           cells: [
                             DataCell(
@@ -249,8 +263,28 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
                             DataCell(Text('฿${currency.format(p.baseSalary)}', style: const TextStyle(fontFamily: 'monospace'))),
                             DataCell(
                               Text(
-                                '${p.workedDays} วัน / ลา ${p.sickLeave} วัน / OT ${p.otDays} วัน',
+                                'ทำงาน ${p.workDays} วัน | หยุด ${p.dayOff} วัน | ลา ${p.sickLeave} วัน${p.otDays > 0 ? " | OT ${p.otDays} วัน" : ""}',
                                 style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                p.housingAllowance > 0 ? '+฿${currency.format(p.housingAllowance)}' : '-',
+                                style: TextStyle(
+                                  color: p.housingAllowance > 0 ? Colors.green.shade700 : Colors.grey,
+                                  fontWeight: p.housingAllowance > 0 ? FontWeight.bold : FontWeight.normal,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                extra > 0 ? '+฿${currency.format(extra)}' : '-',
+                                style: TextStyle(
+                                  color: extra > 0 ? Colors.teal.shade700 : Colors.grey,
+                                  fontWeight: extra > 0 ? FontWeight.bold : FontWeight.normal,
+                                  fontFamily: 'monospace',
+                                ),
                               ),
                             ),
                             DataCell(
@@ -265,11 +299,21 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
                             ),
                             DataCell(
                               Text(
-                                (p.workPermitDeduction + p.otherDeduction) > 0
-                                    ? '-฿${currency.format(p.workPermitDeduction + p.otherDeduction)}'
+                                docs > 0 ? '-฿${currency.format(docs)}' : '-',
+                                style: TextStyle(
+                                  color: docs > 0 ? Colors.red.shade700 : Colors.grey,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                p.excessDayOffDeduction > 0
+                                    ? '-฿${currency.format(p.excessDayOffDeduction)} (${p.excessDayOffDays} วัน)'
                                     : '-',
                                 style: TextStyle(
-                                  color: (p.workPermitDeduction + p.otherDeduction) > 0 ? Colors.red.shade700 : Colors.grey,
+                                  color: p.excessDayOffDeduction > 0 ? Colors.deepOrange.shade800 : Colors.grey,
+                                  fontWeight: p.excessDayOffDeduction > 0 ? FontWeight.bold : FontWeight.normal,
                                   fontFamily: 'monospace',
                                 ),
                               ),
