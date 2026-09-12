@@ -163,31 +163,35 @@ class PayrollCalculationService {
         dayOff = 0;
       }
 
+      // Total off days count towards the 4-day monthly quota:
+      // Day-offs (1.0 day/unit) + Sick Leave (1.0 day/unit) + Half-days (0.5 day/unit)
+      final totalOffDays = (dayOff * 1.0) + (sickLeave * 1.0) + (halfDays * 0.5);
+
       // Work Days calculation matching actual calendar cycle days
       int workDays;
       if (isDaily && explicitWorkDays > 0) {
         workDays = explicitWorkDays;
       } else if (isDaily) {
         final baseDays = isProrate ? workedDays : totalCycleDays;
-        workDays = (baseDays - dayOff - sickLeave - (halfDays * 0.5).round()).clamp(0, totalCycleDays);
+        workDays = (baseDays - totalOffDays).clamp(0, totalCycleDays).round();
       } else if (isProrate) {
-        workDays = (workedDays - dayOff - sickLeave - (halfDays * 0.5).round()).clamp(0, totalCycleDays);
+        workDays = (workedDays - totalOffDays).clamp(0, totalCycleDays).round();
       } else {
         // Standard monthly: actual work days in calendar cycle
-        workDays = (totalCycleDays - dayOff - sickLeave - (halfDays * 0.5).round()).clamp(0, totalCycleDays);
+        workDays = (totalCycleDays - totalOffDays).clamp(0, totalCycleDays).round();
       }
 
       // Base pay calculation
-      int excessDayOffDays = 0;
+      double excessDayOffDays = 0.0;
       double excessDayOffDeduction = 0.0;
       if (isDaily) {
         basePay = (dailyRate * workDays).roundToDouble();
         // Daily wage employee is paid only for days worked, so no separate excess day-off deduction
-        excessDayOffDays = 0;
+        excessDayOffDays = 0.0;
         excessDayOffDeduction = 0.0;
       } else {
-        if (dayOff > 4) {
-          excessDayOffDays = dayOff - 4;
+        if (totalOffDays > 4.0) {
+          excessDayOffDays = totalOffDays - 4.0;
           excessDayOffDeduction = (excessDayOffDays * dailyRate).roundToDouble();
         }
       }

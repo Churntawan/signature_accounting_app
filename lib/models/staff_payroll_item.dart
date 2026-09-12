@@ -20,7 +20,7 @@ class StaffPayrollItem {
   final double advanceDeduction;
   final double workPermitDeduction;
   final double otherDeduction;
-  final int excessDayOffDays;
+  final double excessDayOffDays;
   final double excessDayOffDeduction;
   final double netPay;
   final String status;
@@ -49,7 +49,7 @@ class StaffPayrollItem {
     this.advanceDeduction = 0.0,
     this.workPermitDeduction = 0.0,
     this.otherDeduction = 0.0,
-    this.excessDayOffDays = 0,
+    this.excessDayOffDays = 0.0,
     this.excessDayOffDeduction = 0.0,
     required this.netPay,
     this.status = 'Active',
@@ -87,8 +87,10 @@ class StaffPayrollItem {
       advanceDeduction: (json['advance_deduction'] as num?)?.toDouble() ?? 0.0,
       workPermitDeduction: (json['work_permit_deduction'] as num?)?.toDouble() ?? 0.0,
       otherDeduction: (json['total_deduction'] as num?)?.toDouble() ?? 0.0,
-      excessDayOffDays: (json['excess_day_off_days'] as num?)?.toInt() ?? 0,
-      excessDayOffDeduction: (json['excess_day_off_deduction'] as num?)?.toDouble() ?? 0.0,
+      excessDayOffDays: (json['excess_day_off_days'] as num?)?.toDouble() ?? 0.0,
+      excessDayOffDeduction: (json['excess_day_off_days'] != null && json['excess_day_off_deduction'] != null)
+          ? (json['excess_day_off_deduction'] as num).toDouble()
+          : ((json['excess_day_off_deduction'] as num?)?.toDouble() ?? 0.0),
       netPay: (json['net_pay'] as num?)?.toDouble() ?? 0.0,
       status: json['status']?.toString() ?? 'Active',
       note: json['note']?.toString() ?? '',
@@ -96,6 +98,10 @@ class StaffPayrollItem {
           (json['is_prorate'] == true),
     );
   }
+
+  String get formattedExcessDays => excessDayOffDays % 1 == 0
+      ? excessDayOffDays.toInt().toString()
+      : excessDayOffDays.toString();
 
   Map<String, dynamic> toJson() => {
         'ep_code': epCode,

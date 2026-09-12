@@ -342,7 +342,7 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
                             DataCell(
                               Text(
                                 p.excessDayOffDeduction > 0
-                                    ? '-฿${currency.format(p.excessDayOffDeduction)} (${p.excessDayOffDays} วัน)'
+                                    ? '-฿${currency.format(p.excessDayOffDeduction)} (${p.formattedExcessDays} วัน)'
                                     : '-',
                                 style: TextStyle(
                                   color: p.excessDayOffDeduction > 0 ? Colors.deepOrange.shade800 : Colors.grey,

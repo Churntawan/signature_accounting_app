@@ -239,6 +239,84 @@ void main() {
       expect(tualek.workDays, 21); // 31 - 10 = 21 work days in August cycle
     });
 
+    test('PayrollCalculationService calculates Tualek in 2026-08 (5 Day-offs + 1 Sick = 2 days excess = 833 THB deduction)', () {
+      final employees = [
+        Employee(
+          epCode: 'EP33',
+          nickname: 'Tualek',
+          status: 'Active',
+          baseSalary: 12500.0,
+          payGroup: 'Date : 1',
+          stayOutside: 'Yes',
+        ),
+      ];
+
+      // 5 Day-offs + 1 Sick = 6 days off total. Quota is 4 days -> 2 days excess!
+      final att = [
+        {'ep_code': 'EP33', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-04'},
+        {'ep_code': 'EP33', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-11'},
+        {'ep_code': 'EP33', 'category': 'Sick', 'units': 1.0, 'date': '2026-07-14'},
+        {'ep_code': 'EP33', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-18'},
+        {'ep_code': 'EP33', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-25'},
+        {'ep_code': 'EP33', 'category': 'Day-off', 'units': 1.0, 'date': '2026-08-01'},
+      ];
+
+      final items = PayrollCalculationService.computeStaffPayroll(
+        employees: employees,
+        period: '2026-08',
+        attendanceLogs: att,
+        adjustments: [],
+      );
+
+      final tualek = items.first;
+      expect(tualek.dayOff, 5);
+      expect(tualek.sickLeave, 1);
+      expect(tualek.halfDays, 0.0);
+      expect(tualek.excessDayOffDays, 2.0);
+      expect(tualek.formattedExcessDays, '2');
+      expect(tualek.excessDayOffDeduction, (2.0 * (12500.0 / 30.0)).roundToDouble()); // 833.0
+      expect(tualek.workDays, 25); // 31 calendar days - 6 total off days = 25
+      expect(tualek.housingAllowance, 1000.0);
+      expect(tualek.netPay, 12500.0 + 1000.0 - 833.0); // 12,667.0
+    });
+
+    test('PayrollCalculationService counts Half-day as 0.5 days towards quota', () {
+      final employees = [
+        Employee(
+          epCode: 'EP20',
+          nickname: 'Nge',
+          status: 'Active',
+          baseSalary: 12000.0,
+          payGroup: 'Date : 10',
+        ),
+      ];
+
+      // 4 Day-offs + 1 Half-day = 4.5 days off. Quota is 4 -> 0.5 days excess!
+      final att = [
+        {'ep_code': 'EP20', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-12'},
+        {'ep_code': 'EP20', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-19'},
+        {'ep_code': 'EP20', 'category': 'Day-off', 'units': 1.0, 'date': '2026-07-26'},
+        {'ep_code': 'EP20', 'category': 'Day-off', 'units': 1.0, 'date': '2026-08-02'},
+        {'ep_code': 'EP20', 'category': 'Half-day', 'units': 1.0, 'date': '2026-08-05'},
+      ];
+
+      final items = PayrollCalculationService.computeStaffPayroll(
+        employees: employees,
+        period: '2026-08',
+        attendanceLogs: att,
+        adjustments: [],
+      );
+
+      final emp = items.first;
+      expect(emp.dayOff, 4);
+      expect(emp.sickLeave, 0);
+      expect(emp.halfDays, 1.0);
+      expect(emp.excessDayOffDays, 0.5);
+      expect(emp.formattedExcessDays, '0.5');
+      expect(emp.excessDayOffDeduction, (0.5 * 400.0).roundToDouble()); // 200.0
+      expect(emp.netPay, 12000.0 - 200.0); // 11,800.0
+    });
+
     test('PayrollCalculationService calculates Daily Wage employee accurately (Zin in 2026-09: 27 days = 10,800 THB)', () {
       final employees = [
         Employee(
