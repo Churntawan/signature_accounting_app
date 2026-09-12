@@ -246,6 +246,21 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(p.nickname, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  if (p.isDailyWage) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.amber.shade400),
+                                      ),
+                                      child: Text(
+                                        'รายวัน',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -260,7 +275,25 @@ class _PayrollSyncScreenState extends State<PayrollSyncScreen> {
                                 child: Text(p.payGroup, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               ),
                             ),
-                            DataCell(Text('฿${currency.format(p.baseSalary)}', style: const TextStyle(fontFamily: 'monospace'))),
+                            DataCell(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    p.isDailyWage
+                                        ? '฿${currency.format(p.basePay)}'
+                                        : '฿${currency.format(p.baseSalary)}',
+                                    style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                                  ),
+                                  if (p.isDailyWage)
+                                    Text(
+                                      '(@฿${p.dailyRate.toInt()}/วัน)',
+                                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                    ),
+                                ],
+                              ),
+                            ),
                             DataCell(
                               Text(
                                 'ทำงาน ${p.workDays} วัน | หยุด ${p.dayOff} วัน | ลา ${p.sickLeave} วัน${p.otDays > 0 ? " | OT ${p.otDays} วัน" : ""}',

@@ -97,12 +97,17 @@ class PayrollCalculationService {
         reasons.add('ลาออก ${effectiveEnd.day}/${effectiveEnd.month}/${effectiveEnd.year}');
       }
 
-      final double dailyRate = emp.baseSalary / 30.0;
+      final isDaily = emp.isDailyWage;
+      final double dailyRate = isDaily ? emp.dailyWageRate : (emp.baseSalary / 30.0);
       final int totalCycleDays = cycle.endDate.difference(cycle.startDate).inDays + 1;
       int workedDays = 30;
       double basePay = emp.baseSalary;
 
-      if (isProrate) {
+      if (isDaily) {
+        final defaultDailyWorkDays = (totalCycleDays - 4).clamp(0, totalCycleDays);
+        workedDays = isProrate ? effectiveEnd.difference(effectiveStart).inDays + 1 : defaultDailyWorkDays;
+        if (workedDays < 0) workedDays = 0;
+      } else if (isProrate) {
         final calendarWorked = effectiveEnd.difference(effectiveStart).inDays + 1;
         if (calendarWorked <= 15) {
           workedDays = calendarWorked;
@@ -130,14 +135,21 @@ class PayrollCalculationService {
         }
       }).toList();
 
+      final explicitWorkDays = empAtt
+          .where((a) => a['category'] == 'Work Days' || a['category'] == 'Work')
+          .fold<double>(0.0, (sum, a) => sum + ((a['units'] as num?)?.toDouble() ?? 1.0))
+          .round();
       final loggedDayOffs = empAtt
-          .where((a) => a['category'] == 'Day-off')
+          .where((a) => a['category'] == 'Day-off' || a['category'] == 'OFF')
           .fold<double>(0.0, (sum, a) => sum + ((a['units'] as num?)?.toDouble() ?? 1.0))
           .round();
       final sickLeave = empAtt
-          .where((a) => a['category'] == 'Sick')
+          .where((a) => a['category'] == 'Sick' || a['category'] == 'Sick Leave')
           .fold<double>(0.0, (sum, a) => sum + ((a['units'] as num?)?.toDouble() ?? 1.0))
           .round();
+      final halfDays = empAtt
+          .where((a) => a['category'] == 'Half-day' || a['category'] == 'Half')
+          .fold<double>(0.0, (sum, a) => sum + ((a['units'] as num?)?.toDouble() ?? 0.5));
       final otUnits = empAtt
           .where((a) => a['category'] == 'OT Days' || a['category'] == 'OT')
           .fold<double>(0.0, (sum, a) => sum + ((a['units'] as num?)?.toDouble() ?? 1.0));
@@ -151,20 +163,36 @@ class PayrollCalculationService {
         dayOff = 0;
       }
 
-      // Work Days calculation
-      int workDays = isProrate
-          ? (workedDays - dayOff - sickLeave).clamp(0, totalCycleDays)
-          : (30 - dayOff - sickLeave).clamp(0, 30);
-
-      // Excess day-off calculation (monthly quota is 4 days)
-      int excessDayOffDays = 0;
-      double excessDayOffDeduction = 0.0;
-      if (dayOff > 4) {
-        excessDayOffDays = dayOff - 4;
-        excessDayOffDeduction = (excessDayOffDays * dailyRate).roundToDouble();
+      // Work Days calculation matching actual calendar cycle days
+      int workDays;
+      if (isDaily && explicitWorkDays > 0) {
+        workDays = explicitWorkDays;
+      } else if (isDaily) {
+        final baseDays = isProrate ? workedDays : totalCycleDays;
+        workDays = (baseDays - dayOff - sickLeave - (halfDays * 0.5).round()).clamp(0, totalCycleDays);
+      } else if (isProrate) {
+        workDays = (workedDays - dayOff - sickLeave - (halfDays * 0.5).round()).clamp(0, totalCycleDays);
+      } else {
+        // Standard monthly: actual work days in calendar cycle
+        workDays = (totalCycleDays - dayOff - sickLeave - (halfDays * 0.5).round()).clamp(0, totalCycleDays);
       }
 
-      // Adjustments matching this employee
+      // Base pay calculation
+      int excessDayOffDays = 0;
+      double excessDayOffDeduction = 0.0;
+      if (isDaily) {
+        basePay = (dailyRate * workDays).roundToDouble();
+        // Daily wage employee is paid only for days worked, so no separate excess day-off deduction
+        excessDayOffDays = 0;
+        excessDayOffDeduction = 0.0;
+      } else {
+        if (dayOff > 4) {
+          excessDayOffDays = dayOff - 4;
+          excessDayOffDeduction = (excessDayOffDays * dailyRate).roundToDouble();
+        }
+      }
+
+      // Adjustments matching this employee (supports both English and Thai keywords)
       final empAdjs = adjustments.where((a) => a['ep_code']?.toString() == emp.epCode).toList();
       double advanceDeduction = 0.0;
       double workPermitDeduction = 0.0;
@@ -176,17 +204,18 @@ class PayrollCalculationService {
         final amt = (a['amount'] as num?)?.toDouble() ?? 0.0;
         final type = (a['type'] ?? '').toString();
         final cat = (a['category'] ?? '').toString();
+        final noteStr = (a['note'] ?? '').toString();
 
         if (type == 'Income') {
-          if (cat.contains('Bonus')) {
+          if (cat.contains('Bonus') || cat.contains('โบนัส') || cat.contains('เบี้ยขยัน')) {
             bonusPay += amt;
           } else {
             otherExtra += amt;
           }
         } else {
-          if (cat.contains('Advance') || type == 'Advance') {
+          if (cat.contains('Advance') || type == 'Advance' || cat.contains('เบิก') || noteStr.contains('เบิก')) {
             advanceDeduction += amt;
-          } else if (cat.contains('Passport') || cat.contains('CI') || cat.contains('Permit')) {
+          } else if (cat.contains('Passport') || cat.contains('CI') || cat.contains('Permit') || cat.contains('บัตร') || cat.contains('เอกสาร')) {
             workPermitDeduction += amt;
           } else {
             otherDeduction += amt;
@@ -194,7 +223,7 @@ class PayrollCalculationService {
         }
       }
 
-      // Housing Allowance (฿1,000 for staying outside, eligible after 1 month)
+      // Housing Allowance (defaults to ฿1,000 or custom [Housing:xxx], eligible after 1 month)
       double housingAllowance = 0.0;
       if (emp.stayOutside.toLowerCase() == 'yes') {
         bool eligible = true;
@@ -203,7 +232,7 @@ class PayrollCalculationService {
           if (oneMonth.isAfter(cycle.startDate)) eligible = false;
         }
         if (emp.resignDate != null && emp.resignDate!.isBefore(cycle.endDate)) eligible = false;
-        if (eligible) housingAllowance = 1000.0;
+        if (eligible) housingAllowance = emp.housingAllowanceAmount;
       }
 
       double finalNetPay = basePay + overtimePay + bonusPay + otherExtra + housingAllowance -
@@ -214,6 +243,7 @@ class PayrollCalculationService {
         final savedNet = (saved['net_pay'] as num?)?.toDouble() ?? 0.0;
         if (savedNet > 0 && emp.resignDate != null) {
           finalNetPay = savedNet;
+          basePay = (saved['base_pay'] as num?)?.toDouble() ?? basePay;
         }
       }
 
@@ -224,10 +254,13 @@ class PayrollCalculationService {
         period: period,
         baseSalary: emp.baseSalary,
         basePay: basePay,
+        dailyRate: dailyRate,
+        wageType: emp.wageType,
         workedDays: workedDays,
         workDays: workDays,
         dayOff: dayOff,
         sickLeave: sickLeave,
+        halfDays: halfDays,
         otDays: otDays,
         overtimePay: overtimePay,
         bonusPay: bonusPay,

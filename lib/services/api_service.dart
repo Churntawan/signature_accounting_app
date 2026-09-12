@@ -215,15 +215,25 @@ class ApiService {
     return [];
   }
 
-  // 10. Fetch Attendance from Supabase
-  static Future<List<Map<String, dynamic>>> fetchAttendance() async {
+  // 10. Fetch Attendance from Supabase (filtered by period date window to avoid 1,000 row truncation)
+  static Future<List<Map<String, dynamic>>> fetchAttendance([String? period]) async {
     try {
+      String query = '$supabaseUrl/attendance_log?select=*&order=date.asc';
+      if (period != null && period.contains('-')) {
+        final parts = period.split('-');
+        final y = int.parse(parts[0]);
+        final m = int.parse(parts[1]);
+        // Date ranges for all 3 cycles (1, 10, 20) span between (m-1)-01 and m-25
+        final fromDate = DateTime(y, m - 1, 1).toIso8601String().split('T').first;
+        final toDate = DateTime(y, m, 25).toIso8601String().split('T').first;
+        query = '$supabaseUrl/attendance_log?date=gte.$fromDate&date=lte.$toDate&order=date.asc';
+      }
       final res = await http
           .get(
-            Uri.parse('$supabaseUrl/attendance_log?select=*&order=date.desc'),
+            Uri.parse(query),
             headers: _headers,
           )
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final List<dynamic> list = jsonDecode(res.body);
@@ -269,12 +279,12 @@ class ApiService {
     return [];
   }
 
-  // 13. Fetch Live Staff Payroll (Real-time dynamic calculation across all 15 active staff)
+  // 13. Fetch Live Staff Payroll (Real-time dynamic calculation across all active staff)
   static Future<List<StaffPayrollItem>> fetchLiveStaffPayroll(String period) async {
     try {
       final results = await Future.wait([
         fetchEmployees(),
-        fetchAttendance(),
+        fetchAttendance(period),
         fetchPayrollAdjustments(period),
         fetchPayrollSummary(period),
       ]);

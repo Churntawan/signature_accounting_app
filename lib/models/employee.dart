@@ -23,6 +23,32 @@ class Employee {
 
   bool get isActive => status.toLowerCase() == 'active';
 
+  /// Check if employee is paid on daily wage basis
+  bool get isDailyWage => note.contains('[Wage:Daily]');
+  String get wageType => isDailyWage ? 'Daily' : 'Monthly';
+
+  /// Daily wage rate: parses [DailyRate:xxx] or calculates baseSalary / 30 if baseSalary >= 1000
+  double get dailyWageRate {
+    final match = RegExp(r'\[DailyRate:([0-9.]+)\]').firstMatch(note);
+    if (match != null) {
+      return double.tryParse(match.group(1) ?? '') ?? (baseSalary >= 1000 ? (baseSalary / 30.0).roundToDouble() : baseSalary);
+    }
+    if (baseSalary >= 1000) {
+      return (baseSalary / 30.0).roundToDouble();
+    }
+    return baseSalary > 0 ? baseSalary : 400.0;
+  }
+
+  /// Housing allowance amount (defaults to 1000.0 if stayOutside is Yes, unless custom tag is set)
+  double get housingAllowanceAmount {
+    if (stayOutside.toLowerCase() != 'yes') return 0.0;
+    final match = RegExp(r'\[Housing:([0-9.]+)\]').firstMatch(note);
+    if (match != null) {
+      return double.tryParse(match.group(1) ?? '') ?? 1000.0;
+    }
+    return 1000.0;
+  }
+
   factory Employee.fromJson(Map<String, dynamic> json) {
     DateTime? sDate;
     DateTime? rDate;

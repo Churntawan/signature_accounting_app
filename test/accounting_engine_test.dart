@@ -235,9 +235,54 @@ void main() {
       expect(tualek.excessDayOffDays, 6);
       expect(tualek.excessDayOffDeduction, (6 * (12500.0 / 30.0)).roundToDouble()); // 2500.0
       expect(tualek.housingAllowance, 1000.0);
-      // Net Pay = 12,500 + 1,000 (housing) - 2,500 (excess off) = 11,000.0
-      expect(tualek.netPay, 11000.0);
-      expect(tualek.workDays, 20); // 30 - 10 = 20 work days
+      expect(tualek.workDays, 21); // 31 - 10 = 21 work days in August cycle
+    });
+
+    test('PayrollCalculationService calculates Daily Wage employee accurately (Zin in 2026-09: 27 days = 10,800 THB)', () {
+      final employees = [
+        Employee(
+          epCode: 'EP04',
+          nickname: 'Zin',
+          status: 'Active',
+          baseSalary: 12000.0,
+          payGroup: 'Date : 10',
+          stayOutside: 'Yes',
+          note: '[Wage:Daily] [Housing:1000]',
+        ),
+      ];
+
+      // 4 days off in 31-day cycle (2026-08-11 to 2026-09-10) -> 31 - 4 = 27 days worked
+      final att = [
+        {'ep_code': 'EP04', 'category': 'Day-off', 'units': 1.0, 'date': '2026-08-12'},
+        {'ep_code': 'EP04', 'category': 'Day-off', 'units': 1.0, 'date': '2026-08-15'},
+        {'ep_code': 'EP04', 'category': 'Day-off', 'units': 1.0, 'date': '2026-08-19'},
+        {'ep_code': 'EP04', 'category': 'Day-off', 'units': 1.0, 'date': '2026-09-02'},
+      ];
+
+      final adjs = [
+        {'ep_code': 'EP04', 'type': 'Deduction', 'category': 'Advance (เบิกเงิน)', 'amount': 1500.0},
+      ];
+
+      final items = PayrollCalculationService.computeStaffPayroll(
+        employees: employees,
+        period: '2026-09',
+        attendanceLogs: att,
+        adjustments: adjs,
+      );
+
+      expect(items.length, 1);
+      final zin = items.first;
+      expect(zin.wageType, 'Daily');
+      expect(zin.isDailyWage, true);
+      expect(zin.dailyRate, 400.0);
+      expect(zin.dayOff, 4);
+      expect(zin.workDays, 27); // 31 - 4 = 27 days worked!
+      expect(zin.basePay, 27 * 400.0); // 10,800 THB
+      expect(zin.housingAllowance, 1000.0);
+      expect(zin.advanceDeduction, 1500.0);
+      expect(zin.excessDayOffDeduction, 0.0); // No excess day-off deduction for daily wage
+      // Net Pay = 10,800 + 1,000 - 1,500 = 10,300 THB!
+      expect(zin.netPay, 10300.0);
     });
   });
 }
