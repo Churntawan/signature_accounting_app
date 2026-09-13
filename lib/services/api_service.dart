@@ -237,7 +237,10 @@ class ApiService {
 
       if (res.statusCode == 200) {
         final List<dynamic> list = jsonDecode(res.body);
-        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+        return list
+            .map((e) => Map<String, dynamic>.from(e))
+            .where((e) => !(e['category']?.toString().startsWith('Request:') ?? false))
+            .toList();
       }
     } catch (_) {}
     return [];
